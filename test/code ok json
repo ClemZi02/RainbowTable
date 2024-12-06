@@ -1,0 +1,136 @@
+#fonction de réduction deterministe car si je genere X fois la table c'est X fois les mêmes résultats
+
+
+import hashlib
+import json
+import config
+from tqdm import tqdm  # Importer tqdm pour la barre de progression
+
+def charger_mots(fichier):
+    """Charge le fichier contenant la liste de mots (un mot par ligne)."""
+    with open(fichier, 'r') as f:
+        mots = [ligne.strip() for ligne in f.readlines()]  # Charger tous les mots dans une liste
+    return mots
+
+def generer_hash_md5(mot):
+    """Génère un hash MD5 et le convertit en nombre entier (base 10)."""
+    hash_md5 = hashlib.md5(mot.encode()).hexdigest()
+    return hash_md5  # Retourne le hash en format hexadécimal
+
+def obtenir_mot_reduit(mot, mots):
+    """Fonction de réduction pour obtenir un autre mot à partir du hash MD5 avec une méthode plus robuste."""
+    # Calcul du hash et conversion en base 10
+    hash_valeur = generer_hash_md5(mot)
+    
+    # Appliquer le modulo pour trouver un indice dans la liste, mais avec une transformation du hash plus complexe
+    hash_int = int(hash_valeur, 16)
+    indice = (hash_int + hash_int // len(mots)) % len(mots)  # Transformation du hash pour rendre l'indice plus variable
+    
+    # Sélectionner le mot correspondant à cet indice
+    mot_reduit = mots[indice]
+    
+    return mot_reduit
+
+def generer_chiffres_a_partir_du_hash(mot_reduit):
+    """Génère des chiffres à partir des octets du hash MD5 du mot réduit et les insère dans le mot réduit."""
+    hash_md5_reduit = hashlib.md5(mot_reduit.encode()).digest()  # Obtenir les octets du hash
+    
+    # Extraire 4 chiffres (par exemple en utilisant les premiers octets du hash)
+    chiffres = ''.join(str(hash_md5_reduit[i] % 10) for i in range(4))  # Utiliser 4 chiffres
+    
+    # Insérer les chiffres dans le mot réduit de manière intercalée
+    mot_genere = ''.join(
+        [mot_reduit[i] + chiffres[i] if i < len(chiffres) else mot_reduit[i] for i in range(len(mot_reduit))]
+    )
+    return mot_genere
+
+def appliquer_reduction_multiple(mot, mots, iterations):
+    """Applique plusieurs fois la fonction de réduction sur un mot."""
+    for _ in range(iterations):
+        mot = obtenir_mot_reduit(mot, mots)  # Applique une réduction à chaque itération
+    return mot
+
+def generer_rainbow_table(fichier_mots, taille_table, iterations=config.REDUCTION_ITERATIONS):
+    """Génère une rainbow table avec le mot de base, le mot réduit, les hashages et l'enregistre en JSON."""
+    mots = charger_mots(fichier_mots)
+    
+    # Si la taille de la liste de mots est inférieure à taille_table, répéter ou sélectionner des mots au hasard
+    if len(mots) < taille_table:
+        mots = mots * (taille_table // len(mots)) + mots[:(taille_table % len(mots))]
+    
+    rainbow_table = []
+
+    # Initialiser la barre de progression avec tqdm
+    with tqdm(total=taille_table, desc="Génération de la rainbow table", unit="entrée") as pbar:
+        for mot_de_base in mots[:taille_table]:
+            # Appliquer la réduction plusieurs fois sur le mot de base
+            mot_reduit_final = appliquer_reduction_multiple(mot_de_base, mots, iterations)
+            
+            # Générer les chiffres à partir du hash du mot réduit final
+            mot_genere_avec_chiffres = generer_chiffres_a_partir_du_hash(mot_reduit_final)
+            
+            # Calculer les hashages
+            hash_mot_genere = generer_hash_md5(mot_genere_avec_chiffres)
+            
+            # Obtenir le dernier mot après une réduction supplémentaire
+            dernier_mot = obtenir_mot_reduit(mot_reduit_final, mots)
+            
+            # Appliquer la génération des chiffres pour le dernier mot également
+            dernier_mot_avec_chiffres = generer_chiffres_a_partir_du_hash(dernier_mot)
+            
+            dernier_hash = generer_hash_md5(dernier_mot_avec_chiffres)
+            
+            # Créer l'entrée pour cette ligne de la rainbow table
+            entree = {
+                "mot_de_base": mot_de_base,
+                "mot_utilise": mot_reduit_final,
+                "mot_genere_avec_chiffres": mot_genere_avec_chiffres,
+                "hash_mot_genere": hash_mot_genere,
+                "dernier_hash": dernier_hash,
+                "dernier_mot": dernier_mot_avec_chiffres  # Utiliser le dernier mot avec les chiffres insérés
+            }
+            
+            rainbow_table.append(entree)
+            
+            # Mise à jour de la barre de progression
+            pbar.update(1)
+        
+    # Sauvegarder la rainbow table en format JSON
+    with open("rainbow_table.json", "w") as json_file:
+        json.dump(rainbow_table, json_file, indent=4)
+    
+    print(f"Rainbow table générée et enregistrée dans rainbow_table.json avec {len(rainbow_table)} entrées.")
+
+
+def test_processus(mot_initial, mots, iterations):
+    mot = mot_initial
+    print(f"Mot de base : {mot}")
+    
+    # Appliquer les réductions successivement
+    mot_reduit_final = appliquer_reduction_multiple(mot, mots, iterations)
+    print(f"Mot réduit après {iterations} itérations : {mot_reduit_final}")
+    
+    # Générer les chiffres à partir du hash du mot réduit final
+    mot_genere_avec_chiffres = generer_chiffres_a_partir_du_hash(mot_reduit_final)
+    print(f"Mot généré avec chiffres : {mot_genere_avec_chiffres}")
+    
+    # Calculer les hashages
+    hash_mot_genere = generer_hash_md5(mot_genere_avec_chiffres)
+    print(f"Hash du mot généré : {hash_mot_genere}")
+    
+    # Obtenir le dernier mot après une réduction supplémentaire
+    dernier_mot = obtenir_mot_reduit(mot_reduit_final, mots)
+    print(f"Dernier mot après réduction supplémentaire : {dernier_mot}")
+    
+    # Appliquer la génération des chiffres pour le dernier mot
+    dernier_mot_avec_chiffres = generer_chiffres_a_partir_du_hash(dernier_mot)
+    print(f"Dernier mot avec chiffres : {dernier_mot_avec_chiffres}")
+    
+    dernier_hash = generer_hash_md5(dernier_mot_avec_chiffres)
+    print(f"Dernier hash : {dernier_hash}")
+    
+    return dernier_hash, dernier_mot_avec_chiffres
+
+
+# Exemple d'utilisation avec tes variables
+generer_rainbow_table("words_ccm_2023.txt", taille_table=config.NUM_ENTREES_RAINBOW_TABLE, iterations=config.REDUCTION_ITERATIONS)

@@ -1,0 +1,6 @@
+la fonction de reduction DOIT ETRE deterministre
+c'est a dire que pour un hashé elle doit tjr trouvé le même mot de passe
+
+il ne faut pas appliquer reduce1 puis reduce2 puis reduce3
+mais selon le hash que tu as tu sais laquelle tu dois utiliser
+par exmpkle si ton hash commence par un chiffre tu utilises la premiere, par une lettre la deuxieeme...

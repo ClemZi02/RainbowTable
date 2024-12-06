@@ -12,19 +12,16 @@ def generer_hash_md5(mot):
     return hash_md5  # Retourne le hash en format hexadécimal
 
 def obtenir_mot_reduit(mot, mots):
-    """Fonction de réduction déterministe utilisant un autre mécanisme que la méthode classique."""
+    """Fonction de réduction avec davantage de diversité pour éviter les collisions."""
     # Calcul du hash MD5 du mot de base
     hash_valeur = generer_hash_md5(mot)
     
     # Convertir le hash MD5 hexadécimal en entier
     hash_int = int(hash_valeur, 16)
     
-    # Méthode alternative pour obtenir un indice dans la liste
-    # Utiliser une transformation arithmétique complexe (par exemple, racine carrée et modulo)
-    indice = (hash_int**0.5 + hash_int) % len(mots)  # racine carrée et addition du hash avant modulo
-    
-    # Assurer que l'indice est un entier
-    indice = int(indice)  # Convertir en entier
+    # Transformation du hash MD5 pour plus de diversité
+    # Utiliser une combinaison de racine carrée, multiplication et modulo
+    indice = int(((hash_int ** 0.5 * hash_int // 3) + 9) % len(mots))  # Racine carrée + multiplication pour casser les patterns
     
     # Sélectionner le mot correspondant à cet indice
     mot_reduit = mots[indice]
@@ -50,12 +47,7 @@ def generer_chiffres_a_partir_du_hash(mot_reduit):
     ]
     
     # Convertir la liste de chiffres en chaîne
-    chiffres_str = ''.join(map(str, chiffres))
-    
-    # Ajouter les chiffres au mot réduit, mais garder les lettres intactes
-    mot_final = mot_reduit + chiffres_str  # Par exemple, ajouter les chiffres à la fin du mot réduit
-    
-    return mot_final  # Retourne le mot avec les lettres et les chiffres
+    chiffres_str = ''.j
 
 def appliquer_reduction_multiple(mot, mots, iterations):
     """Applique plusieurs fois la fonction de réduction sur un mot."""

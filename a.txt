@@ -1,0 +1,98 @@
+from threading import Thread
+import config
+import time
+from multiprocessing import Pool, Manager
+from reduceFunction import reduce1
+
+def traiter_mot(mot, mots, iterations, max_attempts, rainbow_table, progress_list):
+    """Effectue les calculs pour un mot donné (réduction, hachage, gestion des collisions)."""
+    try:
+        mot_reduit_final = reduce1.appliquer_reduction_multiple(mot, mots, iterations)
+        hash_mot_genere = reduce1.generer_hash_md5(mot_reduit_final)
+
+        # Gestion des collisions
+        attempts = 0
+        while hash_mot_genere in rainbow_table and attempts < max_attempts:
+            mot_reduit_final = reduce1.appliquer_reduction_multiple(mot, mots, iterations)
+            hash_mot_genere = reduce1.generer_hash_md5(mot_reduit_final)
+            attempts += 1
+
+        # Ajouter au dictionnaire partagé
+        rainbow_table[hash_mot_genere] = mot
+        #print(f"Mot traité: {mot}, Hash ajouté: {hash_mot_genere}")
+
+        # Signaler l'avancement
+        progress_list.append(1)
+    except Exception as e:
+        print(f"Erreur lors du traitement de {mot}: {e}")
+
+
+
+def generer_rainbow_table(fichier_mots, taille_table, iterations=config.REDUCTION_ITERATIONS, max_attempts=10):
+    """Génère une rainbow table en utilisant multiprocessing avec suivi du pourcentage et du temps estimé."""
+    mots = reduce1.charger_mots(fichier_mots)
+
+    # Si la taille de la liste de mots est inférieure à taille_table, répéter ou sélectionner des mots au hasard
+    if len(mots) < taille_table:
+        mots = mots * (taille_table // len(mots)) + mots[:(taille_table % len(mots))]
+
+    with Manager() as manager:
+        rainbow_table = manager.dict()
+        progress_list = manager.list()  # Liste partagée pour le suivi de la progression
+
+        # Préparer les arguments pour chaque tâche
+        args = [
+            (mot, mots, iterations, max_attempts, rainbow_table, progress_list)
+            for mot in mots[:taille_table]
+        ]
+
+        # Lancer le suivi de progression
+        start_time = time.time()
+
+        def suivre_progression():
+            """Affiche le pourcentage et le temps estimé pendant le traitement."""
+            while len(progress_list) < taille_table:
+                completed = len(progress_list)
+                percentage = (completed / taille_table) * 100
+                elapsed_time = time.time() - start_time
+                estimated_total = elapsed_time / completed * taille_table if completed > 0 else 0
+                remaining_time = estimated_total - elapsed_time if completed > 0 else 0
+
+                # Convertir le temps écoulé et restant en minutes et secondes
+                elapsed_minutes, elapsed_seconds = divmod(elapsed_time, 60)
+                remaining_minutes, remaining_seconds = divmod(remaining_time, 60)
+
+                # Affichage
+                print(f"\rProgression : {completed}/{taille_table} "
+                      f"({percentage:.2f}%) - Temps écoulé : {int(elapsed_minutes)}m {int(elapsed_seconds)}s "
+                      f"- Temps restant estimé : {int(remaining_minutes)}m {int(remaining_seconds)}s", end="")
+                time.sleep(2)  # Rafraîchir toutes les 2 secondes
+            print()  # Passer à la ligne suivante après la fin
+
+        # Démarrer le suivi dans une thread séparée
+        suivi_thread = Thread(target=suivre_progression)
+        suivi_thread.start()
+
+        # Utiliser multiprocessing Pool
+        with Pool(processes=5) as pool:
+            pool.starmap(traiter_mot, args)
+
+
+        # Attendre que la thread de suivi se termine
+        suivi_thread.join()
+
+        # Sauvegarde dans un fichier
+        with open("txtFile/rainbow_table.txt", "w") as file:
+            for hash_val, mot_de_base in rainbow_table.items():
+                file.write(f"{mot_de_base} {hash_val}\n")
+
+        # Assurez-vous que les données sont bien terminées avant de récupérer la taille
+        print(f"Rainbow table générée avec {len(rainbow_table)} entrées sans collision.")
+
+
+if __name__ == '__main__':
+    from multiprocessing import freeze_support  # Nécessaire pour les exécutable Windows
+    freeze_support()  # Permet de gérer l'utilisation de multiprocessing sur Windows
+
+    # Exemple d'utilisation
+    generer_rainbow_table("txtFile/words_ccm_2023.txt", taille_table=config.NUM_ENTREES_RAINBOW_TABLE, iterations=config.REDUCTION_ITERATIONS)
